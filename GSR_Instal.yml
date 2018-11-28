@@ -1,0 +1,117 @@
+---
+  - name: This Playbook will configure GSR on the Nodes
+    hosts: all
+
+    tasks:
+
+      - name: Boot up a VM with ISO file from ESXI VM Console
+        vmware_guest:
+          hostname: "{{ vcenter_ip }}"
+          username: "{{ username }}"
+          password: "{{ password }}"
+          name: testvm
+          networks:
+          cdrom:
+            type: iso
+            iso_path: "path"
+        become: yes
+
+      - name: copy the jump key to geo-kolkata
+        copy:
+          src: /tmp/jump_key
+          dest: /tmp/
+          mode: 0644
+          remote_src: yes
+        become: yes
+
+      - name: move the jump key to authorized keys
+        command: cat /tmp/jump_key >> /iris/geo/.ssh/authorized_keys
+        become: yes
+
+      - name: copy the application package to iris/packages directory
+        copy:
+          src: /IRIS-combined-V7.17.1.0.3_PR3_CP43.a17dc50 
+          dest: /iris/packages/
+          mode: 0644
+          remote_src: yes
+        become: yes
+
+      - name: change the ownership of the package
+        shell: |
+          chmod 777 IRIS--combined-V7.17.1.0.3_PR3_CP43.a17dc50
+          chown iris:iris IRIS-combined-V7.17.1.0.3_PR3_CP43.a17dc50 
+        become: yes
+
+      - name: run the iris setup as a iris user
+        shell: ./IRIS---combined-V7.17.1.0.3_PR3_CP43.a17dc50
+        args:
+          chdir: /iris/packages
+        become: yes
+        become_user: iris
+
+      - name: run the setup as iris user
+        shell: ./irisact
+        args:
+          chdir: /iris/versions/V7.17.1.0.3_PR3_CP43.a17dc50/x64-linux-deb-6/bin64/
+        become: yes
+        become_user: iris
+
+      - name: create directories
+        file:
+          path: {{ item }}
+          state: directory
+          mode: 0755
+        with_items:
+          - parted /dev/sdb
+          - mklabel gpt
+          - unit GIB
+        become: yes
+
+      - name: Make partitions
+        parted:
+          device: /dev/sdb
+          number: 2
+          state: present
+          part_start:
+        become: yes
+
+      - name: Make partitions
+        parted:
+          device: /dev/sdb
+          number: 2
+          state: present
+          part_start:
+        become: yes
+
+      - name: create the mount points
+        file:
+          path: {{ item }}
+          state: directory
+          mode: 0755
+        with_items:
+          - s2d
+          - /s2d/archLT
+          - s2d/sr
+         
+        become: yes
+
+      - name: change the fstab.extra
+        lineinfile: 
+          path: /etc/fstab/
+          line: {{ item }}
+          state: present
+          insertafter: EOF
+        with_items:
+          - UUID=1a290ca3-eac1-4338-bc37-3c2ed4bfb862 /s2d/archLT ext4 defaults,noatime 1 1
+          - UUID=1a290ca3-eac1-4338-bc37-3c2ed4bfb862 /s2d/archLT ext4 defaults,noatime 1 1
+        become: yes
+
+      - name: run the commanf mount
+        command: mount -a
+        become: yes
+
+      - name: restart service BC
+        service:
+          name: BC
+          state: restarted
+        become: yes        
